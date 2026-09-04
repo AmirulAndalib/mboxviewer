@@ -3522,7 +3522,7 @@ bool ALongRightProcessProc_LabelView(const CUPDUPDATA* pCUPDUPData)
 	DWORD myThreadPri = GetThreadPriority(h);
 	TRACE(L"threadId=%ld threadPriority=%ld\n", myThreadId, myThreadPri);
 
-	MboxMail::Parse_LabelView(path);
+	MboxMail::Parse_LabelView(MboxMail::s_mails, path);
 	args->exitted = TRUE;
 	return true;
 }
@@ -8831,6 +8831,7 @@ void NListView::EditFindAdvanced(MboxMail *m)
 		}
 
 		m_bHighlightAll = m_advancedParams.m_bHighlightAll;
+		m_bCaseSens = m_advancedParams.m_bCaseSensitive[5];
 
 		BOOL isTextUnicode = IsWindowUnicode(this->GetSafeHwnd());
 		UINT localCP = GetACP();

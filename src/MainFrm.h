@@ -111,6 +111,9 @@ struct CommandLineParms
 	BOOL m_bEmlPreviewMode;
 	CString m_mboxFolderPath;
 	CString m_mboxFileNameOrPath;
+	//
+	CString m_configFilePath;
+	//
 	BOOL m_bEmlPreviewFolderExisted;
 	// file name is the only command line param to open mail file directly by double left click
 	BOOL m_bDirectFileOpenMode;
@@ -297,6 +300,9 @@ public:
 	int MergeMboxArchiveFiles(CArray<MergeFileInfo> &mboxFilePathList, CString &mergedMboxFilePath);
 	int MergeMboxArchiveFiles(CString &mboxListFilePath, CString &mergedMboxFilePath);
 	static int MergeMboxArchiveFile(CFile &fpMergeTo, CString & mboxFilePath, BOOL firstFile);
+	static int MergeSingleMailArchiveFile(MboxMail* m, CFile& fpMergeTo, CFile& fp_input, CString& mboxFilePath, BOOL firstFile);
+	static void GetContentTransferEncoding(MboxMail* m, int offset, CStringA& contentTransferEncoding);
+	static void DetermineLineEnding(char* line, char* last, CStringA& lineEnding);
 
 	static BOOL CanMboxBeSavedInFolder(CString &destinationFolder);
 
@@ -403,6 +409,8 @@ public:
 	CStatusBar& GetStatusBar() { return m_wndStatusBar; }
 	CToolBar&	GetToolBar() { return m_wndToolBar; }
 
+	BOOL MimeDecodeEncode(bool bEncoding, bool base64Type);
+
 
 	//BOOL PreTranslateMessage(MSG* pMsg);
 
@@ -504,6 +512,10 @@ public:
 	afx_msg void OnDevelopmentoptionsTogglertlfordialogs();
 	afx_msg void OnHelpOutlooksupport();
 	afx_msg void OnLanguagetoolsUpdatetranslationfiles();
+	afx_msg void OnBas64Decode();
+	afx_msg void OnBas64Encode();
+	afx_msg void OnQuotedDecode();
+	afx_msg void OnQuotedEncode();
 };
 
 /////////////////////////////////////////////////////////////////////////////

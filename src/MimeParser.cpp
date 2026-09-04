@@ -559,6 +559,9 @@ int MailBody::Load(char *& pszDataBase, const char* pszData, int nDataSize)
 	if (nSize <= 0)
 		return nSize;
 
+	m_bodyHeaderOffset = IntPtr2Int(pszData - pszDataBase);
+	m_bodyHeaderLength = nSize;
+
 	if (!m_AttachmentName2.IsEmpty())
 	{
 		if (m_Name.IsEmpty() && m_AttachmentName.IsEmpty())

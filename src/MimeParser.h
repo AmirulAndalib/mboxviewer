@@ -149,7 +149,9 @@ class MailBody :public MailHeader
 {
 	friend class MailBodyPool;
 public:
-	MailBody() { m_bodyDataOffset = 0; };
+	MailBody() {
+		m_bodyDataOffset = 0; m_bodyDataLength = 0; m_bodyHeaderOffset = 0; m_bodyHeaderLength = 0;
+	};
 	~MailBody() { DeleteAll(); };
 
 	int Load(char *& pszDatabase, const char* pszData, int nDataSize);
@@ -159,6 +161,8 @@ public:
 	int GetBodyPartList(MailBodyList& rList);
 	int m_bodyDataOffset;
 	int m_bodyDataLength;
+	int m_bodyHeaderOffset;
+	int m_bodyHeaderLength;
 
 protected:
 	char* FindBoundary(const char* pszData, const char* pszDataEnd, const char* boundary, int boundaryLength);

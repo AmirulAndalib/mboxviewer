@@ -1766,6 +1766,14 @@ void CCmdLine::ParseParam(LPCWSTR lpszParam, BOOL bFlag, BOOL bLast) // bLast )
 			DWORD nTraceCase = _tstoi(traceCase);
 			CMainFrame::m_commandLineParms.m_traceCase = nTraceCase;
 		}
+#if 0
+		else if (_tcsncmp(lpszParam, L"CONFIG_FILE", 11) == 0)
+		{
+			CString configFilePath = lpszParam + 12;
+			FileUtils::NormalizeFilePath(configFilePath);
+			CMainFrame::m_commandLineParms.m_configFilePath = configFilePath;
+		}
+#endif
 		else
 		{
 			// Unknown argument
@@ -1781,6 +1789,8 @@ void CCmdLine::ParseParam(LPCWSTR lpszParam, BOOL bFlag, BOOL bLast) // bLast )
 				L"  -EML_PREVIEW_MODE\n"
 				L"  -MBOX_MERGE_LIST_FILE=Path to File containing list of mbox files to merge\n"
 				L"  -MBOX_MERGE_TO_FILE=Path to File to save merge results\n"
+				// L"  -CONFIG_FILE=Path to MBoxViewer Configuration File\n"  // 09/03/2026 revisit later
+				L"Path to Mail File\n"
 				L"\nDo you want to continue?"
 				;
 
@@ -2402,6 +2412,7 @@ void CAboutDlg::OnClose()
 
 BOOL TraceOnSize(wchar_t* wndName, HWND hWnd, UINT nType, int cx, int cy)
 {
+#if _DEBUG
 	if (hWnd == 0)
 		return FALSE;
 
@@ -2417,7 +2428,7 @@ BOOL TraceOnSize(wchar_t* wndName, HWND hWnd, UINT nType, int cx, int cy)
 
 	TRACE(L"%s::OnSize(nType=%u, cx=%d, cy=%d GetWindowRect: w=%d h=%d GetClientRect: w=%d h=%d\n", 
 		wndName, nType, cx, cy, ww, wh, cw, ch);
-
+#endif
 	return TRUE;
 }
 

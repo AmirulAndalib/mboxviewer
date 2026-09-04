@@ -851,6 +851,8 @@ BOOL FileUtils::ReadEntireFile(CString &cStrNamePath, SimpleString &txt)
 	DWORD dwAccess = GENERIC_READ;
 	DWORD dwCreationDisposition = OPEN_EXISTING;
 
+	BOOL retCode = FALSE;
+
 	HANDLE hFile = CreateFile(cStrNamePath, dwAccess, FILE_SHARE_READ, NULL, dwCreationDisposition, 0, NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
@@ -875,9 +877,14 @@ BOOL FileUtils::ReadEntireFile(CString &cStrNamePath, SimpleString &txt)
 			else
 				nNumberOfBytesToRead = (DWORD)bytesLeft;
 
-			BOOL retval = ::ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, &nNumberOfBytesRead, lpOverlapped);
-			if (retval == FALSE)
+			BOOL readRetCode = ::ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, &nNumberOfBytesRead, lpOverlapped);
+			if (readRetCode == FALSE)
+			{
+				_ASSERTE(readRetCode == TRUE);
+				txt.Clear();
+				retCode = readRetCode;
 				break;
+			}
 
 			int newCount = txt.Count() + nNumberOfBytesRead;
 			txt.SetCount(newCount);
@@ -886,8 +893,7 @@ BOOL FileUtils::ReadEntireFile(CString &cStrNamePath, SimpleString &txt)
 		}
 		BOOL retClose = CloseHandle(hFile);
 	}
-
-	return TRUE;
+	return retCode;
 }
 
 BOOL FileUtils::NormalizeFilePath(CString &filePath)

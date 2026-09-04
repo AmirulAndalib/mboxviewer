@@ -38,6 +38,7 @@
 #include "Profile.h"
 #include "mboxview.h"
 #include "MimeParser.h"
+#include "MimeHelper.h"
 
 #include "Resource.h"       // main symbols
 #include "MainFrm.h"
@@ -347,6 +348,10 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_DEVELOPMENTOPTIONS_TOGGLERTLFORDIALOGS, &CMainFrame::OnDevelopmentoptionsTogglertlfordialogs)
 	ON_COMMAND(ID_HELP_OUTLOOKSUPPORT, &CMainFrame::OnHelpOutlooksupport)
 	ON_COMMAND(ID_LANGUAGETOOLS_UPDATETRANSLATIONFILES, &CMainFrame::OnLanguagetoolsUpdatetranslationfiles)
+	ON_COMMAND(ID_BAS64_DECODE, &CMainFrame::OnBas64Decode)
+	ON_COMMAND(ID_BAS64_ENCODE, &CMainFrame::OnBas64Encode)
+	ON_COMMAND(ID_QUOTED_DECODE, &CMainFrame::OnQuotedDecode)
+	ON_COMMAND(ID_QUOTED_ENCODE, &CMainFrame::OnQuotedEncode)
 END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -1144,8 +1149,9 @@ void CMainFrame::OnTreeHide()
 	if (m_pListView)
 	{
 		// TODO: m_pListView->m_which needs clarification; there is potential for big trouble
+		// 08/27/2026 Below doesn't seem to make sense, commented out until proven wrong
 		if ((m_pListView->m_which == 0) && !m_bIsTreeHidden)
-			return;
+			int deb = 1 ;// return;
 	}
 
 	isTreeHidden = IsTreeHidden();
@@ -3440,10 +3446,217 @@ int CMainFrame::MergeMboxArchiveFiles(CString &mboxListFilePath, CString &merged
 
 
 // Append single file content to the merge file
-int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BOOL firstFile)
+void CMainFrame::GetContentTransferEncoding(MboxMail* m, int offset, CStringA & contentTransferEncoding)
+{
+	MailBodyContent* body;
+	for (int j = 0; j < m->m_ContentDetailsArray.size(); j++)
+	{
+		body = m->m_ContentDetailsArray[j];
+		if ((offset >= body->m_contentOffset) && (offset <= (body->m_contentOffset + body->m_contentLength)))
+		{
+			contentTransferEncoding = body->m_contentTransferEncoding;
+			break;
+		}
+	}
+	return;
+}
+
+void CMainFrame::DetermineLineEnding(char* line, char* last, CStringA& lineEnding)
+{
+	lineEnding = "\r\n";
+
+	// Determine line ending:  "\r\n"; or "\n";
+	// Just loop looking for \r and \n ??
+	char* p_newline = MimeParser::EatNewLine(line, last);
+	char ch_last = *(p_newline - 1);
+	char ch_before_last = *(p_newline - 2);
+	if (ch_last == '\n')
+	{
+		if (ch_before_last != '\r')
+		{
+			lineEnding = "\n";
+		}
+	}
+	else
+	{
+		// Error \r with \n ?? or 
+		int deb = 1;
+	}
+}
+
+int CMainFrame::MergeSingleMailArchiveFile(MboxMail* m, CFile& fpMergeTo, CFile &fp_input, CString& mboxFilePath, BOOL firstFile)
+{
+	static const char* cFromMailBegin = "From ";
+	static const int cFromMailBeginLen = istrlen(cFromMailBegin);
+
+	CString mFilePath = fp_input.GetFilePath();
+	_int64 fsize = FileUtils::FileSize(mboxFilePath);
+
+	SimpleString &fileData = *MboxMail::m_largelocal1;
+	fileData.Clear();
+	BOOL retRead = FileUtils::ReadEntireFile(mboxFilePath, fileData);
+
+	char* data = fileData.Data();
+	int dataLen = fileData.Count();
+	char* p = data;
+	char* e = data + dataLen;
+
+#if 0
+	// For debugging
+	MailBodyContent* body;
+	SimpleString* bodyBuff = MboxMail::m_largelocal2;
+	bodyBuff->Clear();
+	char* bodyBuffData = bodyBuff->Data();
+	bodyBuff->Append("\"");
+	for (int j = 0; j < m->m_ContentDetailsArray.size(); j++)
+	{
+		body = m->m_ContentDetailsArray[j];
+		char* pBodyData = data + body->m_contentOffset;
+		bodyBuff->Append(pBodyData, body->m_contentLength);
+		bodyBuff->Append("\"");
+
+		int deb = 1;
+
+		bodyBuff->Clear();
+	}
+#endif
+
+	p = MimeParser::SkipEmptyLines(p, e);
+
+	CStringA missingFromLine;
+	if (TextUtilsEx::strncmpExact(p, e, cFromMailBegin, cFromMailBeginLen) != 0)
+	{
+		// From 1513218656940664977@xxx Thu Sep 24 18:02:48 +0000 2015
+		// More parsing would be needed to find first line with Date and Time
+		// The below is safe for parsing the created mbox file
+		missingFromLine = "From 1513218656940664977@xxx ";
+	}
+	else //if (TextUtilsEx::strncmpExact(p, e, cFromMailBegin, cFromMailBeginLen) == 0)
+	{
+		// Jump over "From " line
+		char* p_newline = MimeParser::EatNewLine(p, e);
+		p = p_newline;
+	}
+
+	CStringA lineEnding = "\r\n";
+	DetermineLineEnding(p, e, lineEnding);
+
+	// Find all "Line " offsets
+	CArray<int, int> fromLineOffsetArray;
+
+	while (p < e)
+	{
+		if (TextUtilsEx::strncmpExact(p, e, cFromMailBegin, cFromMailBeginLen) == 0)
+		{
+			int offset = IntPtr2Int(p - data);
+			fromLineOffsetArray.Add(offset);
+			char* fromLine = data + offset;
+		}
+		p = MimeParser::EatNewLine(p, e);
+	}
+
+	int arrayCnt = (int)fromLineOffsetArray.GetCount();
+	SimpleString* outbuf = MboxMail::m_inbuf;
+	char* outData = outbuf->Data();
+	int offsetDataToCopy = 0;
+	outbuf->ClearAndResize((int)fsize + arrayCnt * 8);
+
+	if (fromLineOffsetArray.GetCount() > 0)
+	{
+		for (int j = 0; j < arrayCnt; j++)
+		{
+			int offset = fromLineOffsetArray[j];
+			outbuf->Append(data + offsetDataToCopy, offset - offsetDataToCopy);
+
+			char* fromLine = data + offset;
+
+			char afterFromChar = fromLine[cFromMailBeginLen];
+
+			char* p_nextLine = MimeParser::EatNewLine(fromLine, e);
+			int lineLen = IntPtr2Int(p_nextLine - fromLine);  // ends with CR LF
+			BOOL breakLine = FALSE;
+
+			// or check if line length < 76 ??
+			if ((afterFromChar != '\r') && (afterFromChar != '\n'))
+				breakLine = TRUE; // or check if line to long after prepending ' ' char
+
+			offsetDataToCopy = IntPtr2Int(p_nextLine - data);
+
+			CStringA contentTransferEncoding;
+			GetContentTransferEncoding(m, offset, contentTransferEncoding);
+
+			if (contentTransferEncoding.CompareNoCase("base64") == 0)
+			{
+				_ASSERTE(contentTransferEncoding.CompareNoCase("base64"));
+			}
+			else if (contentTransferEncoding.CompareNoCase("quoted-printable") == 0)
+			{
+				if (breakLine)
+				{
+					outbuf->Append(" ");
+					outbuf->Append(cFromMailBegin, cFromMailBeginLen);
+					outbuf->Append("=");
+					outbuf->Append(lineEnding, lineEnding.GetLength());
+					outbuf->Append(&fromLine[cFromMailBeginLen], lineLen - cFromMailBeginLen);
+					int deb = 1;
+				}
+				else
+				{
+					outbuf->Append(" ");
+					outbuf->Append(fromLine, lineLen);
+					int deb = 1;
+
+				}
+				int deb = 1;
+			}
+			else if ((contentTransferEncoding.CompareNoCase("7bit") == 0) ||
+				(contentTransferEncoding.CompareNoCase("8bit") == 0) ||
+				contentTransferEncoding.IsEmpty())
+			{
+				outbuf->Append(" ");
+				outbuf->Append(fromLine, lineLen);
+				int deb = 1;
+			}
+			else
+			{
+				_ASSERTE(0);
+				outbuf->Append(" ");
+				outbuf->Append(fromLine, lineLen);
+				int deb = 1;
+			}
+			int deb = 1;
+		}
+		int lenToCopy = dataLen - offsetDataToCopy;
+		char* dataToCopy = data + offsetDataToCopy;
+		_ASSERTE(offsetDataToCopy < dataLen);
+		outbuf->Append(data + offsetDataToCopy, dataLen - offsetDataToCopy);
+		int deb = 1;
+	}
+
+	if (!missingFromLine.IsEmpty())
+	{
+		// From 1513218656940664977@xxx Thu Sep 24 18:02:48 +0000 2015
+		// More parsing would be needed to find first line with Date and Time
+		// The below is safe for parsing the created mbox file
+		//CStringA missingFromLine = "From 1513218656940664977@xxx ";
+
+		// Add exception handler or use different file type and open, write
+		fpMergeTo.Write(missingFromLine, missingFromLine.GetLength());
+		fpMergeTo.Write(lineEnding, lineEnding.GetLength());
+	}
+
+	// Add exception handler or use different file type and open, write
+	fpMergeTo.Write(outbuf->Data(), outbuf->Count());
+	fpMergeTo.Write(lineEnding, lineEnding.GetLength());
+	return 1;
+}
+
+int CMainFrame::MergeMboxArchiveFile(CFile& fpMergeTo, CString& mboxFilePath, BOOL firstFile)
 {
 	// All archive files are assumed valid; merge
 	// Caller should check the file content to validate. Not done yet
+	static const char* cFromMailBegin = "From ";
+	static const int cFromMailBeginLen = istrlen(cFromMailBegin);
 
 	CString filePath;
 	CString fileName;
@@ -3453,7 +3666,7 @@ int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BO
 	{
 		CFile fp_input;
 		CFileException ExError;
-		if (!fp_input.Open(mboxFilePath, CFile::modeRead, &ExError))
+		if (!fp_input.Open(mboxFilePath, CFile::modeRead | CFile::shareDenyWrite, &ExError))
 		{
 			DWORD lastErr =::GetLastError();
 #if 1
@@ -3478,23 +3691,60 @@ int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BO
 			return -1;
 		}
 
+		_int64 fsize = FileUtils::FileSize(mboxFilePath);
+
+		// Encapsulate in function 
+		int itemCntLimit = 2;
+		BOOL parseContent = TRUE;
+
+		MailArray s_mails;
+		MboxMail::Parse_LabelView(s_mails, mboxFilePath, itemCntLimit, parseContent);
+
+
+		CString mboxFileName;
+		FileUtils::GetFileName(mboxFilePath, mboxFileName);
+		if ((mboxFileName.Compare(L"mime-message-1.eml") == 0) ||
+			(mboxFileName.Compare(L"mime-message-4.eml") == 0))
+		{
+			if ((s_mails.GetCount() > 1) || (s_mails.GetCount() <= 0))
+				int deb = 1;
+			int deb = 1;
+		}
+
+		if (s_mails.GetCount() == 1)  // single mail message, fix potential "Line " issue
+		{
+			MboxMail* m = s_mails[0];
+			int ret = CMainFrame::MergeSingleMailArchiveFile(m, fpMergeTo, fp_input, mboxFilePath, firstFile);
+
+			fp_input.Close();
+
+			MboxMail::DestroyMailArray(&s_mails);
+
+			return 1;
+		}
+
+		MboxMail::DestroyMailArray(&s_mails);
+
+		// Merge mbox mail archive with multiple mails, assume "Line " issue is fixed already
+
 		// Append file
 		UINT wantBytes = 16 * 1024;
+
+		if (fsize < wantBytes)
+			wantBytes = (int)fsize;
+
 		// don't use  MboxMail::m_oubuf is still used by dlgFile above !!!!! 
 		MboxMail::m_inbuf->ClearAndResize(wantBytes + 2);
 		char *inBuffer = MboxMail::m_inbuf->Data();
 
 		UINT readBytes = 0;
-
 		readBytes = fp_input.Read(inBuffer, wantBytes);
 		if (readBytes <= 0)
 		{
+			// Add exception handler or use different file type and open, read, write
 			fp_input.Close();
 			return -1;
 		}
-
-		static const char *cFromMailBegin = "From ";
-		static const int cFromMailBeginLen = istrlen(cFromMailBegin);
 
 		char *p = inBuffer;
 		char *e = p + readBytes;
@@ -3504,8 +3754,8 @@ int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BO
 
 		p = MimeParser::SkipEmptyLines(p, e);
 
-		char *ch_end_line = "\r\n";
-		int ch_end_line_len = 2;
+		CStringA lineEnding = "\r\n";
+		DetermineLineEnding(p, e, lineEnding);
 
 		if (TextUtilsEx::strncmpExact(p, e, cFromMailBegin, cFromMailBeginLen) != 0)
 		{
@@ -3515,25 +3765,17 @@ int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BO
 			CStringA FromLine = "From 1513218656940664977@xxx ";
 
 			p_newline = MimeParser::EatNewLine(p, e);
-			char ch_last = *(p_newline - 1);
-			char ch_before_last = *(p_newline - 2);
-			if (ch_last == '\n')
-			{
-				if (ch_before_last != '\r')
-				{
-					ch_end_line = "\n";
-					ch_end_line_len = 1;
-				}
-			}
 
+			// Add exception handler or use different file type and open, write
 			fpMergeTo.Write(FromLine, FromLine.GetLength());
-			fpMergeTo.Write(ch_end_line, ch_end_line_len);
+			fpMergeTo.Write(lineEnding, lineEnding.GetLength());
 		}
 		inBuffer = p;
 		readBytes = IntPtr2Int(e - p);
 
 		if (readBytes > 0)
 		{
+			// Add exception handler or use different file type and open, read, write
 			fpMergeTo.Write(inBuffer, readBytes);
 		}
 
@@ -3542,11 +3784,13 @@ int CMainFrame::MergeMboxArchiveFile(CFile &fpMergeTo, CString &mboxFilePath, BO
 			readBytes = fp_input.Read(inBuffer, wantBytes);
 			if (readBytes > 0)
 			{
+				// Add exception handler or use different file type and open, read, write
 				fpMergeTo.Write(inBuffer, readBytes);
 			}
 		} while (readBytes > 0);
 
-		fpMergeTo.Write(ch_end_line, ch_end_line_len);
+		// Add exception handler or use different file type and open, read, write
+		fpMergeTo.Write(lineEnding, lineEnding.GetLength());
 
 #if 0
 		// not sure whether below is neeeded in case no CR NL or just NL at the file end
@@ -5615,6 +5859,52 @@ int CommandLineParms::VerifyParameters()
 			return -2;
 #endif
 	}
+#if 0
+	// 09/03/2026 revisit later
+	// cmd: mboxview -CONFIG_FILE=m_configFilePath
+	if (!m_configFilePath.IsEmpty() && !m_bEmlPreviewMode)
+	{
+		if (!FileUtils::PathFileExist(m_configFilePath))
+		{
+			CString txt;
+			CString fmt = L"Invalid -CONFIG_FILE=\"%s\" option.\nNo such File:  \"%s\"\n\n";
+			ResHelper::TranslateString(fmt);
+			txt.Format(fmt, m_configFilePath, m_configFilePath);
+
+			HWND h = NULL; // we don't have any window yet  
+			int answer = MyMessageBox(h, txt, L"Error", MB_APPLMODAL | MB_ICONQUESTION | MB_OK);
+			return -1;
+		}
+
+		CString configFilePath;
+		CString configFileName;
+		FileUtils::GetFolderPathAndFileName(m_configFilePath, configFilePath, configFileName);
+
+		CString folderPath = configFilePath;
+
+		CString driveName;
+		CString directory;
+		CString fileNameBase;
+		CString fileNameExtention;
+
+		folderPath.TrimRight(L"\\");
+		folderPath.Append(L"\\");
+
+		FileUtils::SplitFilePath(folderPath, driveName, directory, fileNameBase, fileNameExtention);
+		if (fileNameExtention.CompareNoCase(L".config"))
+		{
+			CString txt;
+			CString fmt = L"Invalid -CONFIG_FILE=\"%s\" option.\nInvalid file extension \"%s\" .\n"
+				"File extension must be set to .config .\n";
+			ResHelper::TranslateString(fmt);
+			txt.Format(fmt, m_configFilePath, fileNameExtention);
+
+			HWND h = NULL; // we don't have any window yet  
+			int answer = MyMessageBox(h, txt, L"Error", MB_APPLMODAL | MB_ICONWARNING | MB_OK);
+			return -1;
+		}
+	}
+#endif
 	return(1);
 }
 
@@ -7547,3 +7837,134 @@ void CMainFrame::SetStatusBarIndicatorPaneSize()
 	m_wndStatusBar.SetPaneInfo(nIndex, nID, nStyle, panel2Size);
 }
 
+BOOL CMainFrame::MimeDecodeEncode(bool bEncoding, bool base64Type)
+{
+	SimpleString fileData;
+	SimpleString outputData;
+
+	CString inputFile;
+	CString inputFilePath;
+
+	DWORD dwFlags = OFN_EXPLORER;
+	CFileDialog dlgFile(TRUE, NULL, NULL, dwFlags, NULL, NULL, 0, TRUE);
+
+	dlgFile.m_pOFN->lpstrTitle = _T("Select Input File");
+
+	INT_PTR ret = dlgFile.DoModal();
+	if (ret == IDOK)
+	{
+		inputFile = dlgFile.GetFileName();
+		inputFilePath = dlgFile.GetPathName();
+	}
+	else
+		return FALSE;
+
+	if (!FileUtils::PathFileExist(inputFilePath))
+	{
+		CString txt;
+		CString fmt = L"Trying to open file \"%s\" that doesn't exist.\n\n\n";
+		ResHelper::TranslateString(fmt);
+		txt.Format(fmt, inputFilePath);
+
+		HWND h = GetSafeHwnd(); // we don't have any window yet
+		int answer = MyMessageBox(h, txt, L"Info", MB_APPLMODAL | MB_ICONINFORMATION | MB_OK);
+
+		return FALSE;
+	}
+
+	BOOL retRead = FileUtils::ReadEntireFile(inputFilePath, fileData);
+
+	char* bodyBegin = fileData.Data();;
+	int bodyLength = fileData.Count();
+
+	if (base64Type)
+	{
+		MboxCMimeCodeBase64 d64(bodyBegin, bodyLength, bEncoding);
+		int dlength = d64.GetOutputLength();
+		outputData.ClearAndResize(dlength + 1);
+
+		int retlen = d64.GetOutput((unsigned char*)outputData.Data(), dlength);
+		if (retlen > 0)
+		{
+			outputData.SetCount(retlen);
+		}
+		else
+		{
+			outputData.Clear();
+			return FALSE;
+		}
+	}
+	else
+	{
+		MboxCMimeCodeQP dGP(bodyBegin, bodyLength);
+		int dlength = dGP.GetOutputLength();
+		outputData.ClearAndResize(dlength + 1);
+
+		int retlen = dGP.GetOutput((unsigned char*)outputData.Data(), dlength);
+		if (retlen > 0)
+		{
+			outputData.SetCount(retlen);
+		}
+		else
+		{
+			outputData.Clear();
+			return FALSE;
+		}
+	}
+
+	CString outputFilePath = inputFilePath + ".txt";
+	if (base64Type)
+	{
+		if (bEncoding == true)
+			outputFilePath = inputFilePath + ".base64.txt";
+	}
+	else
+	{
+		if (bEncoding == true)
+			outputFilePath = inputFilePath + ".quoted.txt";
+	}
+
+	BOOL retWrite = FALSE;
+	if (ret)
+	{
+		retWrite = FileUtils::Write2File(outputFilePath, (unsigned char*)outputData.Data(), outputData.Count());
+	}
+
+	return TRUE;
+}
+
+void CMainFrame::OnBas64Decode()
+{
+	// TODO: Add your command handler code here
+	bool bEncoding = false;
+	bool base64Type = true;
+	BOOL ret = CMainFrame::MimeDecodeEncode(bEncoding, base64Type);
+	int deb = 1;
+}
+
+void CMainFrame::OnBas64Encode()
+{
+	// TODO: Add your command handler code here
+	bool bEncoding = true;
+	bool base64Type = true;
+	BOOL ret = CMainFrame::MimeDecodeEncode(bEncoding, base64Type);
+	int deb = 1;
+}
+
+void CMainFrame::OnQuotedDecode()
+{
+	// TODO: Add your command handler code here
+	bool bEncoding = false;
+	bool base64Type = false;  // quoted
+	BOOL ret = CMainFrame::MimeDecodeEncode(bEncoding, base64Type);
+	int deb = 1;
+}
+
+void CMainFrame::OnQuotedEncode()
+{
+	// TODO: Add your command handler code here
+	bool bEncoding = true;
+	bool base64Type = false; // quoted
+	BOOL ret = CMainFrame::MimeDecodeEncode(bEncoding, base64Type);
+	int deb = 1;
+}

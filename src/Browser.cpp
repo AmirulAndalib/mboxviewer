@@ -182,6 +182,7 @@ void CBrowser::OnDocumentCompleteExplorer(LPDISPATCH pDisp, VARIANT FAR* URL)
 		pMsgView->FindStringInIHTMLDocument(pListView->m_searchString, pListView->m_bWholeWord, pListView->m_bCaseSens);
 	}
 	pListView->m_bHighlightAllSet = FALSE;
+	pListView->m_bCaseSens = FALSE;
 #if 0
 	// Already set by Command UI in void CMainFrame::OnUpdateMailDownloadStatus(CCmdUI *pCmdUI)
 	if (pFrame) {

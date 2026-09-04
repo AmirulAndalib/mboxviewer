@@ -2955,6 +2955,15 @@ void NTreeView::InsertMailFile(CString& mailFile)
 		}
 
 		HTREEITEM hFolder = FindFolder(path);
+		
+		if (hFolder == 0)
+		{
+			NTreeView* pTreeView = pFrame->GetTreeView();
+			BOOL expand = TRUE;
+			pTreeView->DoOpen(path, expand);
+		}
+
+		hFolder = FindFolder(path);
 		if (hFolder)
 		{
 			HTREEITEM hItem = NTreeView::FindItem(hFolder, mailFileName);
@@ -3208,7 +3217,8 @@ void NTreeView::OnUpdateTreeExpand(CCmdUI* pCmdUI)
 
 void NTreeView::OnUpdateFileRefresh(CCmdUI* pCmdUI)
 {
-	pCmdUI->Enable(m_tree.GetRootItem() != NULL);
+	//pCmdUI->Enable(m_tree.GetRootItem() != NULL);
+	pCmdUI->Enable(TRUE);
 }
 
 void NTreeView::OnFileRefresh()
@@ -8443,6 +8453,7 @@ int NTreeView::MergeMailArchiveFiles(HTREEITEM hFolder)
 	HWND h = GetSafeHwnd();
 	MboxMail::ShowHint(HintConfig::MergeFilesHint, h);
 
+	MboxMail::pCUPDUPData = NULL;
 	CMainFrame* pFrame = DYNAMIC_DOWNCAST(CMainFrame, AfxGetApp()->m_pMainWnd);
 
 	// TODO: customize CFileDialog to avoid potential buffer overflow and corruption
@@ -8565,6 +8576,11 @@ restart:
 
 				if (pFrame->MergeMboxArchiveFiles(fileList, filePath) < 0)
 					return -1;
+
+				int paneId = 0;
+				CString stsText = L"Ready";
+				if (pFrame)
+					pFrame->SetStatusBarPaneText(paneId, stsText, TRUE);
 
 				//CString txt = L"Created Mbox Mail Archive file \n\n" + filePath;
 				CString txt = L"Created Mbox Mail Archive file";

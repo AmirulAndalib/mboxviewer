@@ -70,6 +70,12 @@ MboxMailTableType *MboxMail::m_pMboxMailTable = 0;
 MboxMail::MboxMailMapType *MboxMail::m_pMboxMailMap = 0;
 int MboxMail::m_nextGroupId = 0;
 
+
+// TODO: Too many buffer , large memory footprint
+// Define clearly buffers that can persist across multiple function calls and
+// buffers that can be used locally within single function
+
+// Check how these are used, locally or across multiple function calls
 SimpleString* MboxMail::m_outbuf = new SimpleString(1*1024*1024);
 SimpleString* MboxMail::m_inbuf = new SimpleString(1*1024*1024);
 SimpleString* MboxMail::m_outdata = new SimpleString(1*1024*1024);
@@ -78,6 +84,7 @@ SimpleString* MboxMail::m_workbuf = new SimpleString(1*1024*1024);
 SimpleString* MboxMail::m_tmpbuf = new SimpleString(1*1024*1024);
 SimpleString* MboxMail::m_largebuf = new SimpleString(1*1024*1024);
 //
+// Thse should be used within single function call
 SimpleString* MboxMail::m_largelocal1 = new SimpleString(10*1024*1024);
 SimpleString* MboxMail::m_largelocal2 = new SimpleString(10*1024*1024);
 SimpleString* MboxMail::m_largelocal3 = new SimpleString(10*1024*1024);
@@ -1597,7 +1604,9 @@ char szFrom6[] = "\nFrom ";
 char	*g_szFrom;
 int		g_szFromLen;
 
-bool MboxMail::Process(CString &filePath, ProgressTimer& progressTimer, register char *p, DWORD bufSize, _int64 startOffset,  bool bFirstView, bool bLastView, _int64 &lastStartOffset, bool bEml, _int64 &msgOffset, CString &statusText, BOOL parseContent)
+bool MboxMail::Process(MailArray & s_mails, CString &filePath, ProgressTimer& progressTimer, register char *p, DWORD bufSize,
+	_int64 startOffset,  bool bFirstView, bool bLastView, _int64 &lastStartOffset, bool bEml, _int64 &msgOffset, 
+	CString &statusText, int itemCntLimit, BOOL parseContent)
 {
 	MY_USES_CONVERSION;
 	static const char *cFromMailBegin = "From ";
@@ -1870,6 +1879,9 @@ bool MboxMail::Process(CString &filePath, ProgressTimer& progressTimer, register
 
 							if (s_mails.GetCount() == 37)
 								int deb = 1;
+
+							if ((itemCntLimit > 0) && (s_mails.GetCount() >= itemCntLimit))
+								return true;
 
 							UINT_PTR dwProgressbarPos = 0;
 							ULONGLONG workRangePos = startOffset + (p - orig);
@@ -2557,7 +2569,8 @@ void MboxMail::Parse(LPCWSTR path)
 		try
 		{
 #endif
-			MboxMail::Process(filePath, progressTimer, p, viewBufSize, viewOffset, firstView, lastView, lastStartOffset, bEml, msgOffset, statusText);
+			MboxMail::Process(MboxMail::s_mails, filePath, progressTimer, p, viewBufSize, viewOffset, firstView, lastView,
+				lastStartOffset, bEml, msgOffset, statusText);
 #ifdef USE_STACK_WALKER
 		}
 		catch (...)
@@ -2643,7 +2656,7 @@ void MboxMail::Parse(LPCWSTR path)
 // This is basically the same as MboxMail::Parse().
 // It parses and find all messages wothout parsing mail message content
 // Used during  merging of all mbox files in root and subfolders
-void MboxMail::Parse_LabelView(LPCWSTR path)
+void MboxMail::Parse_LabelView(MailArray &s_mails, LPCWSTR path, int itemCntLimit, BOOL parseContent)
 {
 	CString filePath(path);
 	MboxMail::SetMboxFilePath(filePath);
@@ -2655,7 +2668,11 @@ void MboxMail::Parse_LabelView(LPCWSTR path)
 	HANDLE hFile = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL,
 		OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		CString errorText = FileUtils::GetLastErrorAsString();
+		DWORD err = GetLastError();
 		return;
+	}
 
 	unsigned _int64 fSize = 0;
 	MboxMail::s_oSize = MboxMail::s_fSize;
@@ -2669,6 +2686,8 @@ void MboxMail::Parse_LabelView(LPCWSTR path)
 	int mappingsInFile = (int)((fSize - 1) / mappingSize) + 1;
 	HANDLE hFileMap = CreateFileMapping(hFile, NULL, PAGE_READONLY, (DWORD)(fSize >> 32), (DWORD)fSize, NULL);
 	if (hFileMap == NULL) {
+		CString errorText = FileUtils::GetLastErrorAsString();
+		DWORD err = GetLastError();
 		CloseHandle(hFile);
 		return;
 	}
@@ -2759,7 +2778,9 @@ void MboxMail::Parse_LabelView(LPCWSTR path)
 		try
 		{
 #endif
-			MboxMail::Process(filePath, progressTimer, p, viewBufSize, viewOffset, firstView, lastView, lastStartOffset, bEml, msgOffset, parsingFileText, FALSE);
+			// BOOL parseContent = FALSE; added as param
+			MboxMail::Process(s_mails, filePath, progressTimer, p, viewBufSize, 
+				viewOffset, firstView, lastView, lastStartOffset, bEml, msgOffset, parsingFileText, itemCntLimit, parseContent);
 #ifdef USE_STACK_WALKER
 		}
 		catch (...)
@@ -3313,6 +3334,8 @@ char * MboxMail::ParseContent(MboxMail *mail, char *startPos, char *endPos)
 			contentDetails->m_contentDisposition = pBP->m_Disposition;
 			contentDetails->m_contentId = pBP->m_ContentId;
 			contentDetails->m_contentTransferEncoding = pBP->m_TransferEncoding;
+			contentDetails->m_headerOffset = pBP->m_bodyHeaderOffset;
+			contentDetails->m_headerLength = pBP->m_bodyHeaderLength;
 
 			if (!pBP->m_AttachmentName.IsEmpty())
 			{
@@ -3337,6 +3360,29 @@ char * MboxMail::ParseContent(MboxMail *mail, char *startPos, char *endPos)
 #endif
 	// now it is save to free mBody
 	MailBody::FreeMailBody(mBody);
+#if 0
+	// 
+	CFile fpm;
+	CFileException ExError2;
+	if (!fpm.Open(MboxMail::s_path, CFile::modeRead | CFile::shareDenyWrite, &ExError2))
+	{
+		DWORD lastErr = ::GetLastError();
+		HWND h = GetSafeHwnd();
+		CString fmt = L"Could not open mail file:\n\n\"%s\"\n\n%s";  // new format
+		CString errorText = FileUtils::ProcessCFileFailure(fmt, MboxMail::s_path, ExError2, lastErr, h);
+	}
+
+	MailBodyContent* body;
+	SimpleString data;
+	for (int j = 0; j < m->m_ContentDetailsArray.size(); j++)
+	{
+		body = m->m_ContentDetailsArray[j];
+		data.Copy()
+
+		TRACE();
+	}
+#endif
+
 	return mailBegin;  // not used, what should we return ?
 }
 
@@ -3352,6 +3398,18 @@ void MboxMail::DestroyMboxMail(MboxMail *m)
 		m->m_ContentDetailsArray[j] = 0;
 	}
 	delete m;
+}
+
+void MboxMail::DestroyMailArray(MailArray* array)
+{
+	MailArray& mails = *array;
+
+	int i;
+	for (i = 0; i < mails.GetCount(); i++)
+	{
+		MboxMail::DestroyMboxMail(mails[i]);
+		mails[i] = 0;
+	}
 }
 
 void MboxMail::Destroy(MailArray *array)
@@ -11849,7 +11907,7 @@ void MboxMail::CreateHintText(int hintNumber, CString& hintText)
 	else if (hintNumber == HintConfig::MailSummaryColumnWidthHint)
 	{
 		hintText.Append(
-			L"Upon MBoxViewer exit, the width of all mail summary list column will be saved into the registry and restored upon startup.\n"
+			L"Upon MBoxViewer exit, the width of all mail summary list column will be saved and restored upon startup.\n"
 			"\n"
 		);
 	}

@@ -78,6 +78,31 @@ MBox Viewer executable is released as mbox-viewer.exe-v1.0.3.XX.zip file. Please
 This wil create mbox-viewer.exe-v1.0.3.XX subfolder under the selected folder. 
 The mbox-viewer.exe-v1.0.3.XX subfolder will contain two executable files mboxview.exe or mboxview64.exe.
 
+
+Running
+--------
+
+Open created mbox-viewer.exe-v1.0.3.XX subfolder. Double left click on the mboxview.exe or mboxview64.exe file to start MBox Viewer. 
+You will be asked to configure folder for all temporary files created by MBox Viewer.
+
+On the main top tool bar, select the `File` option to open the drop menu and then select the `Select folder...` option. 
+Browse to the folder containing one or more mbox and/or eml mail archive files and select it. All valid mail archive files will appear in the Mail Archive Tree window.
+
+Left click on one of the archive files to load all mails within that archive.  Progress bar will appear and automatically close after the selected archive is fully processed. 
+Mail header information of each email will appear in the Summary window. 
+Note that parsing of very large archive file may take some time since the mail archives are text files and every character has to be examine one by one.  
+However, subsequent loading of mails is done from the index file created by the mboxview during the initial parsing of the archive file and is much faster.
+The created index file contains content meta data of each mail in the archive file. i.e. the mail header information and the position of each mail within the mail file for quick access to the mail message/body. 
+The index files have the .mboxview extension.
+	   
+Left Click on one of the mails in the Summary window to show the Message/Body of that email in the Message window.
+The mail retrieval state, total number of mails in the archive and the position of the selected mail within the archive is shown on the status bar.
+	   
+Refer to [Introduction to MBox Viewer](https://www.youtube.com/watch?v=qrjjR9Bvz8k) video for basic information on how to run MBox Viewer.
+
+Refer to provided [UserGuide.pdf](UserGuide.pdf)  how to run MBox Viewer from command line.
+
+
 Configuration
 -------------
 
@@ -145,39 +170,18 @@ By default English language is enabled. User can select different language durin
 Support for Arabic language is experimental. Looking for feedback from users fluent in English and Arabic.
 
 
-Running
---------
-
-Open created mbox-viewer.exe-v1.0.3.XX subfolder. Double left click on the mboxview.exe or mboxview64.exe file to start MBox Viewer. 
-You will be asked to configure folder for all temporary files created by MBox Viewer.
-
-On the main top tool bar, select the `File` option to open the drop menu and then select the `Select folder...` option. 
-Browse to the folder containing one or more mbox and/or eml mail archive files and select it. All valid mail archive files will appear in the Mail Archive Tree window.
-
-Left click on one of the archive files to load all mails within that archive.  Progress bar will appear and automatically close after the selected archive is fully processed. 
-Mail header information of each email will appear in the Summary window. 
-Note that parsing of very large archive file may take some time since the mail archives are text files and every character has to be examine one by one.  
-However, subsequent loading of mails is done from the index file created by the mboxview during the initial parsing of the archive file and is much faster.
-The created index file contains content meta data of each mail in the archive file. i.e. the mail header information and the position of each mail within the mail file for quick access to the mail message/body. 
-The index files have the .mboxview extension.
-	   
-Left Click on one of the mails in the Summary window to show the Message/Body of that email in the Message window.
-The mail retrieval state, total number of mails in the archive and the position of the selected mail within the archive is shown on the status bar.
-	   
-Refer to [Introduction to MBox Viewer](https://www.youtube.com/watch?v=qrjjR9Bvz8k) video for basic information on how to run MBox Viewer.
-
-Refer to provided [UserGuide.pdf](UserGuide.pdf)  how to run MBox Viewer from command line.
-
 Font Size
 ----------
 
 User has an option to increase the font size of GUI objects if desired. On the main top menu tool bar, select the `File` option to open the drop menu and then select the `Font Config` option.
 Use CTRL+mouse scroll wheel to change the font size in the mail message window.
 
+
 Changes
 -------
 
 See [CHANGE_LOG.md](CHANGE_LOG.md) file.
+
 
 Building
 --------

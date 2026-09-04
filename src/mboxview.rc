@@ -102,6 +102,16 @@ BEGIN
             BEGIN
                 MENUITEM "CFile Open Failure",          ID_TEST_CFILEOPENFAILURE
             END
+            POPUP "base64"
+            BEGIN
+                MENUITEM "decode",                      ID_BAS64_DECODE
+                MENUITEM "encode",                      ID_BAS64_ENCODE
+            END
+            POPUP "quoted-printable"
+            BEGIN
+                MENUITEM "decode",                      ID_QUOTED_DECODE
+                MENUITEM "encode",                      ID_QUOTED_ENCODE
+            END
         END
         MENUITEM SEPARATOR
         MENUITEM "most recent folders",         ID_FILE_MRU_FILE1

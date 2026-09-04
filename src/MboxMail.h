@@ -230,7 +230,9 @@ struct PRINT_MAIL_ARCHIVE_TO_CSV_ARGS
 class MailBodyContent
 {
 public:
-	MailBodyContent() { m_pageCode = 0; m_contentOffset = 0; m_contentLength = 0; m_attachmentNamePageCode = 0; m_isEmbeddedImage = false; };
+	MailBodyContent() { m_pageCode = 0; m_contentOffset = 0; m_contentLength = 0; m_headerOffset = 0; m_headerLength = 0;
+		m_attachmentNamePageCode = 0; m_isEmbeddedImage = false;
+	};
 	~MailBodyContent() {};
 	CStringA m_contentType;
 	CStringA m_contentTransferEncoding;
@@ -244,6 +246,8 @@ public:
 	int  m_contentOffset;
 	int m_contentLength;
 	bool m_isEmbeddedImage;
+	int  m_headerOffset;
+	int m_headerLength;
 
 	bool IsAttachment();
 	bool IsInlineAttachment();
@@ -603,15 +607,15 @@ public:
 	static _int64 s_curmap, s_step;
 	static const CUPDUPDATA* pCUPDUPData;
 	static void Parse(LPCWSTR path);
-	static bool Process(CString &filePath, ProgressTimer &progressTimer, char *p, DWORD size, _int64 startOffset, bool bFirstView, bool bLastView, 
-		_int64 &lastStartOffset, bool bEml, _int64 &msgOffset, CString &statusText, BOOL parseContent = TRUE);
+	static bool Process(MailArray& s_mails, CString &filePath, ProgressTimer &progressTimer, char *p, DWORD size, _int64 startOffset, bool bFirstView, bool bLastView,
+		_int64 &lastStartOffset, bool bEml, _int64 &msgOffset, CString &statusText, int itemCntLimit = -1, BOOL parseContent = TRUE);
 	static void FindDateInHeader(char *data, int datelen, CStringA& dateStr);
 	static void MonthToString(int month, CStringA &monthStr);
 	static time_t parseRFC822Date(CStringA &date, CStringA &format);
 	static BOOL CreateRFC822Date(CStringA &date, CStringA &rfcDateString);
 	static int NormalizeText(MboxMail* m);
 	//
-	static void Parse_LabelView(LPCWSTR path);
+	static void Parse_LabelView(MailArray &s_mails, LPCWSTR path, int itemCntLimit = -1, BOOL parseContent = FALSE);
 
 	static BOOL m_seExceptionMsgBox;
 	static BOOL m_cppExceptionMsgBox;
@@ -692,6 +696,7 @@ public:
 	static void SortByIndex(MailArray *s_mails = 0, bool bDesc = false);
 	static void assignColor2ConvesationGroups(MailArray *mails);
 	static void Destroy(MailArray *marray = 0);
+	static void DestroyMailArray(MailArray* array);
 	static void DestroyMboxMail(MboxMail *m);
 	static bool preprocessConversationsByThreadId();
 	static bool HasGMThreadId();
