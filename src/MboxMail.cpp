@@ -11907,7 +11907,7 @@ void MboxMail::CreateHintText(int hintNumber, CString& hintText)
 	else if (hintNumber == HintConfig::MailSummaryColumnWidthHint)
 	{
 		hintText.Append(
-			L"Upon MBoxViewer exit, the width of all mail summary list column will be saved and restored upon startup.\n"
+			L"Upon exit, the width of all mail summary list column will be saved and restored upon startup.\n"
 			"\n"
 		);
 	}
