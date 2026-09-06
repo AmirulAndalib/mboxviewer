@@ -917,6 +917,7 @@ int MimeParser::GetThreadId(CStringA &fieldLine, int startPos, unsigned __int64 
 
 int MimeParser::GetParamValue(CStringA &fieldLine, int startPos, const char *param, int paramLen, CStringA &value)
 {
+	// Updated on 09/05/2026 it is quite expensive; fix it
 	// TODO: it will break if ';' is part of the value. Need to handle quoted values containing ';' ?
 	value.Empty();
 
@@ -924,42 +925,85 @@ int MimeParser::GetParamValue(CStringA &fieldLine, int startPos, const char *par
 	char *pend_sv = pbegin_sv + fieldLine.GetLength();
 	char *p = pbegin_sv + startPos;
 
-	// or keep it simple and require that *p == '=' at this point ?
 	while (p < pend_sv)
 	{
+		// find param
 		//p = strstr(p, param);
 		p = TextUtilsEx::strnstrUpper2Lower(p, pend_sv, param, paramLen);
 		if (p == 0)
 			return 0;
 
+		char* p_save = p;
 		p = p + paramLen;
-		// SkipWhite ??
+
 		char c = *p;
-		if (c == '=')
+		if (c == '=') {
 			break;
+		}
+		else if (c == ' ')  // could be part of value ??  name="parm xx"
+		{
+			// Must find '='
+			p++;
+			while (p < pend_sv)
+			{
+				if (*p != ' ')
+					break;
+				else
+					p++;
+			}
+			if ((p < pend_sv) && (*p == '='))
+				break;
+		}
+		p = p_save + 1;
+		_ASSERTE(p > p_save);
+		// continue
 	}
-
-	char *pend = strchr(p, ';');
-	if (pend == 0)
-		pend = pend_sv;
-
-	while (p < pend)
-	{
-		if (*p++ == '=')
-			break;
-	}
-	if (p >= pend)
+	if (p >= pend_sv)
 		return 0;
 
+	_ASSERTE(*p == '=');
+
+	p++; //jump over '='
+	// skip blanks
+	while (p < pend_sv)
+	{
+		if (*p != ' ')
+			break;
+		else
+			p++;
+	}
+
+	char* pend = pend_sv;
 	// handle quotes strings
 	char * pEndQoute = 0;
 	if (*p == '"')
 	{
+		// what is ending quote missing ??
+		// find within p and pend
 		pEndQoute = strchr(p+1, '"');
-		if (pEndQoute)
+		_ASSERTE(pEndQoute);
+		if (pEndQoute) {
 			pend = pEndQoute;
+		}
 		else
-			; // ???
+		{
+			int deb = 1;
+		}
+	}
+	else
+	{
+		char* pend = strchr(p, ';');
+		if (pend == 0)
+			pend = pend_sv;
+
+		// trim end blanks
+		while (pend > p)
+		{
+			if (*p != ' ')
+				break;
+			else
+				pend--;
+		}
 	}
 
 	char *posBegin = p;
@@ -967,6 +1011,7 @@ int MimeParser::GetParamValue(CStringA &fieldLine, int startPos, const char *par
 
 	value = fieldLine.Mid(IntPtr2Int(posBegin - pbegin_sv), IntPtr2Int(posEnd - posBegin));
 
+	// should we trimp quoted values ?? probably not ??
 	value.Trim("\"\t ");
 
 	return 1;

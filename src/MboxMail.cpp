@@ -3354,6 +3354,9 @@ char * MboxMail::ParseContent(MboxMail *mail, char *startPos, char *endPos)
 			if ((pBP->m_PageCode == 0) && pBP->m_IsTextHtml)
 				int deb = 1;
 
+			if (pBP->m_PageCode == 0)
+				int deb = 1;
+
 			m->m_ContentDetailsArray.push_back(contentDetails);
 		}
 	}
